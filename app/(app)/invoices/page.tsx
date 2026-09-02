@@ -1,0 +1,17 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
+import { requireUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { effectiveStatus, invoiceTotals, money, formatDate } from "@/lib/utils";
+import { Button, StatusPill, EmptyState } from "@/components/ui";
+import InvoiceFilters from "@/components/InvoiceFilters";
+
+export default async function InvoicesPage({ searchParams }: { searchParams: Promise<Record<string,string|undefined>> }){
+ const user=await requireUser(); const sp=await searchParams; const q=sp.q||""; const status=sp.status||"all"; const clientId=sp.clientId||"all"; const sort=sp.sort||"newest";
+ const clients=await prisma.client.findMany({where:{userId:user.id},orderBy:{name:"asc"}});
+ const where:any={userId:user.id}; if(q)where.OR=[{number:{contains:q,mode:"insensitive"}},{client:{name:{contains:q,mode:"insensitive"}}},{client:{company:{contains:q,mode:"insensitive"}}}]; if(clientId!=="all")where.clientId=clientId;
+ if(status==="draft")where.status="DRAFT"; else if(status==="paid")where.status="PAID"; else if(status==="sent")where.status="SENT"; else if(status==="overdue")where.status="SENT",where.dueDate={lt:new Date()};
+ const orderBy=sort==="oldest"?{issueDate:"asc"}:sort==="due-soon"?{dueDate:"asc"}:{issueDate:"desc"};
+ const invoices=await prisma.invoice.findMany({where,include:{client:true,lineItems:true},orderBy});
+ return <div className="space-y-6"><div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end"><div><p className="text-sm font-semibold text-brand-600">Billing pipeline</p><h1 className="mt-1 text-3xl font-black tracking-tight">Invoices</h1><p className="mt-2 text-sm text-slate-500">Search, filter and act without losing the context.</p></div><Link href="/invoices/new"><Button><Plus size={17}/> New invoice</Button></Link></div><InvoiceFilters clients={clients} /><div className="rounded-2xl border border-slate-200 bg-white shadow-panel">{invoices.length===0?<div className="p-5"><EmptyState title="No invoices found" description="Adjust your filters or create a new invoice to get started." action={<Link href="/invoices/new"><Button><Plus size={16}/> Create invoice</Button></Link>}/></div>:<div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left text-sm"><thead className="bg-slate-50 text-xs uppercase tracking-wider text-slate-400"><tr><th className="px-5 py-3.5">Invoice</th><th className="px-5 py-3.5">Client</th><th className="px-5 py-3.5">Issued</th><th className="px-5 py-3.5">Due</th><th className="px-5 py-3.5">Status</th><th className="px-5 py-3.5 text-right">Amount</th></tr></thead><tbody className="divide-y divide-slate-100">{invoices.map(inv=>{const s=effectiveStatus(inv);const t=invoiceTotals(inv);return <tr key={inv.id} className="hover:bg-slate-50/70"><td className="px-5 py-4"><Link href={`/invoices/${inv.id}`} className="font-bold text-ink hover:text-brand-600">{inv.number}</Link></td><td className="px-5 py-4"><p className="font-semibold">{inv.client.name}</p><p className="text-xs text-slate-400">{inv.client.company||"Independent"}</p></td><td className="px-5 py-4 text-slate-500">{formatDate(inv.issueDate)}</td><td className="px-5 py-4 text-slate-500">{formatDate(inv.dueDate)}</td><td className="px-5 py-4"><StatusPill status={s}/></td><td className="px-5 py-4 text-right font-black">{money(t.total,user.currency)}</td></tr>})}</tbody></table></div>}</div></div>
+}

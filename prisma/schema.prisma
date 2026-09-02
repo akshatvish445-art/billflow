@@ -1,0 +1,87 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+}
+
+model User {
+  id             String      @id @default(cuid())
+  email          String      @unique
+  passwordHash   String
+  name           String?
+  businessName   String      @default("Your Business")
+  logoData       String?
+  currency       String      @default("INR")
+  invoicePrefix  String      @default("INV")
+  invoiceSequence Int        @default(1000)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  clients        Client[]
+  invoices       Invoice[]
+}
+
+model Client {
+  id        String    @id @default(cuid())
+  userId    String
+  name      String
+  email     String
+  company   String?
+  address   String?
+  phone     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  invoices  Invoice[]
+
+  @@index([userId, createdAt])
+  @@index([userId, email])
+  @@index([userId, name])
+}
+
+model Invoice {
+  id           String        @id @default(cuid())
+  userId       String
+  clientId     String
+  number       String
+  issueDate    DateTime
+  dueDate      DateTime
+  notes        String?
+  taxRate      Decimal       @default(0)
+  discountRate Decimal       @default(0)
+  status       InvoiceStatus @default(DRAFT)
+  publicToken  String        @unique
+  sentAt       DateTime?
+  paidAt       DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  client       Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  lineItems    InvoiceLineItem[]
+
+  @@index([userId, status, dueDate])
+  @@index([userId, clientId])
+  @@index([userId, createdAt])
+  @@index([userId, issueDate])
+  @@unique([userId, number])
+}
+
+model InvoiceLineItem {
+  id          String   @id @default(cuid())
+  invoiceId   String
+  description String
+  quantity    Decimal
+  rate        Decimal
+  createdAt   DateTime @default(now())
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+}
