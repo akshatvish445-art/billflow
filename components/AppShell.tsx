@@ -7,8 +7,127 @@ import { Logo } from "@/components/Logo";
 import { initials } from "@/lib/utils";
 
 const nav=[{href:"/dashboard",label:"Overview",icon:LayoutDashboard},{href:"/invoices",label:"Invoices",icon:FileText},{href:"/clients",label:"Clients",icon:Users},{href:"/settings",label:"Settings",icon:Settings}];
-export function AppShell({ user, children }: { user: { name: string|null; email:string; businessName:string; logoData:string|null }; children:React.ReactNode }){
- const pathname=usePathname(); const router=useRouter(); const [open,setOpen]=useState(false);
- const logout=async()=>{await fetch("/api/auth/logout",{method:"POST"});router.push("/login");router.refresh();};
- return <div className="min-h-screen bg-slate-50"><aside className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-slate-200 bg-white px-4 py-5 transition-transform lg:translate-x-0 ${open?"translate-x-0":"-translate-x-full"}`}><div className="flex items-center justify-between px-2"><Logo/><button className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden" onClick={()=>setOpen(false)}><X size={18}/></button></div><div className="mt-8 space-y-1">{nav.map(item=>{const Icon=item.icon; const active=pathname===item.href||pathname.startsWith(item.href+"/"); return <Link key={item.href} href={item.href} onClick={()=>setOpen(false)} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold ${active?"bg-brand-50 text-brand-700":"text-slate-600 hover:bg-slate-100"}`}><Icon size={18}/>{item.label}</Link>})}</div><div className="mt-auto absolute bottom-5 left-4 right-4"><div className="mb-3 rounded-2xl bg-slate-50 p-3"><div className="flex items-center gap-3"><div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-ink text-xs font-black text-white">{user.logoData?<img src={user.logoData} alt="" className="h-full w-full object-cover"/>:initials(user.name||user.businessName)}</div><div className="min-w-0"><p className="truncate text-sm font-bold text-ink">{user.businessName}</p><p className="truncate text-xs text-slate-400">{user.email}</p></div></div></div><button onClick={logout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-500 hover:bg-rose-50 hover:text-rose-700"><LogOut size={18}/> Log out</button></div></aside><div className="lg:pl-64"><header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-5 backdrop-blur sm:px-7 lg:hidden"><button onClick={()=>setOpen(true)} className="rounded-xl border border-line p-2"><Menu size={18}/></button><Logo compact/><div className="h-9 w-9"/></header><div className="mx-auto max-w-[1500px] p-5 sm:p-7">{children}</div></div><div className={`fixed inset-0 z-30 bg-slate-900/30 lg:hidden ${open?"block":"hidden"}`} onClick={()=>setOpen(false)} /></div>
+export function AppShell({
+  user,
+  children,
+}: {
+  user: {
+    name: string | null;
+    email: string;
+    businessName: string;
+    logoData: string | null;
+    plan?: string;
+  };
+  children: React.ReactNode;
+}) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/login");
+    router.refresh();
+  };
+
+  const isPro = user.plan === "PRO";
+
+  return (
+    <div className="min-h-screen bg-slate-50">
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 border-r border-slate-200 bg-white px-4 py-5 transition-transform lg:translate-x-0 ${
+          open ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="flex items-center justify-between px-2">
+          <Logo />
+          <button
+            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
+            onClick={() => setOpen(false)}
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="mt-8 space-y-1">
+          {nav.map((item) => {
+            const Icon = item.icon;
+            const active = pathname === item.href || pathname.startsWith(item.href + "/");
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => setOpen(false)}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${
+                  active ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                <Icon size={18} />
+                {item.label}
+              </Link>
+            );
+          })}
+        </div>
+
+        <div className="mt-auto absolute bottom-5 left-4 right-4 space-y-3">
+          {/* Subscription Tier Pill */}
+          <Link
+            href="/settings"
+            className={`flex items-center justify-between rounded-2xl border px-3.5 py-2.5 text-xs transition ${
+              isPro
+                ? "border-brand-200 bg-brand-50/70 text-brand-900 hover:bg-brand-100/70"
+                : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
+            }`}
+          >
+            <div className="flex items-center gap-2 font-bold">
+              <span className={`h-2 w-2 rounded-full ${isPro ? "bg-brand-600 animate-pulse" : "bg-emerald-500"}`} />
+              <span>{isPro ? "Pro Studio ($15/mo)" : "Starter ($9/mo)"}</span>
+            </div>
+            <span className="text-[10px] font-extrabold text-brand-600 uppercase tracking-wider">
+              {isPro ? "Active" : "Upgrade"}
+            </span>
+          </Link>
+
+          <div className="rounded-2xl bg-slate-50 p-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-ink text-xs font-black text-white">
+                {user.logoData ? (
+                  <img src={user.logoData} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initials(user.name || user.businessName)
+                )}
+              </div>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-ink">{user.businessName}</p>
+                <p className="truncate text-xs text-slate-400">{user.email}</p>
+              </div>
+            </div>
+          </div>
+
+          <button
+            onClick={logout}
+            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-sm font-semibold text-slate-500 hover:bg-rose-50 hover:text-rose-700 transition"
+          >
+            <LogOut size={18} /> Log out
+          </button>
+        </div>
+      </aside>
+
+      <div className="lg:pl-64">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-slate-200 bg-white/90 px-5 backdrop-blur sm:px-7 lg:hidden">
+          <button onClick={() => setOpen(true)} className="rounded-xl border border-line p-2">
+            <Menu size={18} />
+          </button>
+          <Logo compact />
+          <div className="h-9 w-9" />
+        </header>
+        <div className="mx-auto max-w-[1500px] p-5 sm:p-7">{children}</div>
+      </div>
+
+      <div
+        className={`fixed inset-0 z-30 bg-slate-900/30 lg:hidden ${open ? "block" : "hidden"}`}
+        onClick={() => setOpen(false)}
+      />
+    </div>
+  );
 }

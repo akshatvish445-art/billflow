@@ -1,22 +1,26 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { errorResponse, notFoundResponse, unauthorized } from "@/lib/http";
 import { effectiveStatus, invoiceTotals } from "@/lib/utils";
 import { buildInvoicePdf } from "@/lib/pdf";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const user = await getCurrentUser();
-  if (!user) return unauthorized();
-  const { id } = await params;
+export async function GET(_: Request, { params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
   try {
-    const invoice = await prisma.invoice.findFirst({
-      where: { id, userId: user.id },
-      include: { client: true, lineItems: { orderBy: { createdAt: "asc" } } },
+    const invoice = await prisma.invoice.findUnique({
+      where: { publicToken: token },
+      include: {
+        client: true,
+        user: true,
+        lineItems: { orderBy: { createdAt: "asc" } },
+      },
     });
-    if (!invoice) return notFoundResponse("Invoice");
+
+    if (!invoice || invoice.status === "DRAFT") {
+      return new NextResponse("Invoice not found", { status: 404 });
+    }
+
     const pdf = buildInvoicePdf({
       number: invoice.number,
       issueDate: invoice.issueDate,
@@ -25,21 +29,22 @@ export async function GET(_: Request, { params }: { params: Promise<{ id: string
       taxRate: invoice.taxRate,
       discountRate: invoice.discountRate,
       client: invoice.client,
-      business: { name: user.businessName, currency: user.currency },
+      business: { name: invoice.user.businessName, currency: invoice.user.currency, logoData: invoice.user.logoData },
       lineItems: invoice.lineItems,
       totals: invoiceTotals(invoice),
       status: effectiveStatus(invoice),
     });
+
     return new NextResponse(new Uint8Array(pdf), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${invoice.number.replace(/[^a-zA-Z0-9_-]/g, "_")}.pdf"`,
-        "Cache-Control": "private, no-store",
+        "Cache-Control": "public, max-age=60",
       },
     });
   } catch (error) {
-    console.error("invoice.pdf", error);
-    return errorResponse("Could not generate invoice PDF.", 500);
+    console.error("public.invoice.pdf", error);
+    return new NextResponse("Could not generate invoice PDF", { status: 500 });
   }
 }

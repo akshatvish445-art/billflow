@@ -9,8 +9,14 @@ body { margin: 0; background: #f8fafc; color: #0f172a; font-family: Inter, ui-sa
 button, input, textarea, select { font: inherit; }
 ::selection { background: #c7d2fe; color: #312e81; }
 
+@page {
+  margin: 12mm;
+  size: portrait;
+}
+
 @media print {
   .no-print { display: none !important; }
-  body { background: white !important; }
-  .print-page { box-shadow: none !important; border: 0 !important; }
+  body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  main { padding: 0 !important; }
+  article { box-shadow: none !important; border: 1px solid #e2e8f0 !important; border-radius: 12px !important; }
 }
