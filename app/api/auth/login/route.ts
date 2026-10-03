@@ -10,6 +10,17 @@ export async function POST(req: Request) {
     if (!parsed.success) return errorResponse("Enter a valid email and password.");
 
     const email = parsed.data.email.toLowerCase();
+
+    // Auto-provision demo account and sample data on demand
+    if (email === "demo@billflow.app") {
+      try {
+        const { ensureDemoUser } = await import("@/lib/demo");
+        await ensureDemoUser();
+      } catch (err) {
+        console.error("Auto-seeding demo user failed:", err);
+      }
+    }
+
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user || !(await verifyPassword(parsed.data.password, user.passwordHash))) {
       return errorResponse("Invalid email or password.", 401);

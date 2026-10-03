@@ -1,6 +1,7 @@
 /**
  * Executive-Grade PDF Generator for BillFlow
- * Generates vector-rendered, publication-quality commercial and Indian GST tax invoices.
+ * Generates vector-rendered, publication-quality commercial and Indian GST tax invoices
+ * matching the exact on-screen layout, styling, and typography of the invoice viewer.
  */
 
 export type PdfInvoice = {
@@ -64,7 +65,6 @@ function pdfEscape(val: unknown): string {
   return String(val ?? "")
     .normalize("NFKD")
     .replace(/[^\x20-\x7E]/g, (char) => {
-      // Map common Unicode currency symbols to clean ASCII labels
       if (char === "₹") return "INR ";
       if (char === "€") return "EUR ";
       if (char === "£") return "GBP ";
@@ -76,7 +76,7 @@ function pdfEscape(val: unknown): string {
     .replace(/\)/g, "\\)");
 }
 
-// Approximate Helvetica character widths for pixel-perfect right alignment
+// Approximate Helvetica character widths for right alignment
 function charWidth(char: string, bold: boolean): number {
   if (char === " " || char === "." || char === "," || char === ":" || char === ";") return 0.278;
   if (char === "i" || char === "l" || char === "'" || char === "!" || char === "|") return 0.23;
@@ -183,9 +183,9 @@ export function buildInvoicePdf(invoice: PdfInvoice): Buffer {
   };
 
   // Dimensions & Margins (US Letter 612 x 792)
-  const left = 45;
-  const right = 567;
-  const pageWidth = 522;
+  const left = 36;
+  const right = 576;
+  const pageWidth = right - left; // 540
 
   const isGst = Boolean(invoice.isGstInvoice || invoice.business.gstin);
   const cgstVal = Number(invoice.cgstAmount || invoice.totals.cgst || 0);
@@ -194,39 +194,56 @@ export function buildInvoicePdf(invoice: PdfInvoice): Buffer {
   const isIntraState = cgstVal > 0 || sgstVal > 0;
 
   // 1. Top Decorative Brand Bar
-  fillRect(left, 764, pageWidth, 5, isGst ? 0.06 : 0.24, isGst ? 0.58 : 0.32, isGst ? 0.36 : 0.96);
+  fillRect(left, 768, pageWidth, 4, isGst ? 0.02 : 0.31, isGst ? 0.59 : 0.27, isGst ? 0.41 : 0.90);
 
   // 2. Header Section
   // Monogram Logo Badge
   const monogram = (invoice.business.name || "BF").slice(0, 2).toUpperCase();
-  fillRect(left, 706, 42, 42, 0.09, 0.11, 0.19);
-  addText(left + 9, 718, 16, monogram, true, 1, 1, 1);
+  fillRect(left, 712, 42, 42, 0.06, 0.09, 0.16);
+  addText(left + 9, 725, 15, monogram, true, 1, 1, 1);
 
-  // Business Name & Tagline
-  addText(left + 54, 730, 16, invoice.business.name || "Business", true, 0.06, 0.09, 0.16);
+  // Business Name & Subtitle
+  addText(left + 52, 737, 16, invoice.business.name || "Business Workspace", true, 0.06, 0.09, 0.16);
   addText(
-    left + 54,
-    714,
-    9,
-    isGst
-      ? `GSTIN: ${invoice.business.gstin || "REGISTERED"} | PAN: ${invoice.business.pan || "N/A"}`
-      : "COMMERCIAL INVOICE",
+    left + 52,
+    723,
+    8.5,
+    isGst ? "Registered GST Organization" : "Commercial Billing Workspace",
     false,
-    0.35,
-    0.40,
-    0.50
+    0.45,
+    0.50,
+    0.60
   );
 
-  // Document Title & Number (Right Side)
-  addRightText(right, 730, 20, isGst ? "TAX INVOICE" : "INVOICE", true, 0.06, 0.09, 0.16);
-  // Invoice Number Chip
-  const invNum = `#${invoice.number}`;
-  const invNumW = textWidth(invNum, 10, true) + 16;
-  fillRect(right - invNumW, 707, invNumW, 18, 0.94, 0.96, 0.98);
-  strokeRect(right - invNumW, 707, invNumW, 18, 0.82, 0.86, 0.91, 0.8);
-  addRightText(right - 8, 712, 10, invNum, true, 0.15, 0.20, 0.30);
+  // Seller Organization Box (Address + GSTIN / PAN / State)
+  if (invoice.business.businessAddress || invoice.business.gstin) {
+    const sellerBoxY = 668;
+    const sellerBoxH = 46;
+    fillRect(left + 52, sellerBoxY, 280, sellerBoxH, 0.97, 0.98, 0.99);
+    strokeRect(left + 52, sellerBoxY, 280, sellerBoxH, 0.88, 0.91, 0.94, 0.6);
 
-  // Status Stamp Badge
+    let sY = sellerBoxY + sellerBoxH - 12;
+    if (invoice.business.businessAddress) {
+      addText(left + 60, sY, 7.5, invoice.business.businessAddress.slice(0, 58), false, 0.35, 0.40, 0.50);
+      sY -= 11;
+    }
+    const gstRow = [
+      invoice.business.gstin ? `GSTIN: ${invoice.business.gstin}` : "",
+      invoice.business.pan ? `PAN: ${invoice.business.pan}` : "",
+      invoice.business.state ? `State: ${invoice.business.state} (${invoice.business.stateCode || ""})` : "",
+    ]
+      .filter(Boolean)
+      .join("  |  ");
+    if (gstRow) {
+      addText(left + 60, sY, 7, gstRow, true, 0.18, 0.24, 0.35);
+    }
+  }
+
+  // Right Header: TAX INVOICE title, Invoice Number, Status Badge & Place of Supply
+  addRightText(right, 738, 11, isGst ? "TAX INVOICE" : "INVOICE", true, isGst ? 0.05 : 0.31, isGst ? 0.55 : 0.27, isGst ? 0.38 : 0.90);
+  addRightText(right, 715, 20, invoice.number, true, 0.06, 0.09, 0.16);
+
+  // Status Badge Pill
   const normStatus = (invoice.status || "DRAFT").toUpperCase();
   let badgeFill = [0.93, 0.95, 0.98];
   let badgeStroke = [0.8, 0.85, 0.92];
@@ -234,236 +251,261 @@ export function buildInvoicePdf(invoice: PdfInvoice): Buffer {
   let badgeLabel = normStatus;
 
   if (normStatus === "PAID") {
-    badgeFill = [0.88, 0.97, 0.92];
-    badgeStroke = [0.55, 0.88, 0.68];
-    badgeTextColor = [0.06, 0.5, 0.28];
-    badgeLabel = "PAID IN FULL";
+    badgeFill = [0.92, 0.98, 0.94];
+    badgeStroke = [0.65, 0.90, 0.75];
+    badgeTextColor = [0.04, 0.48, 0.24];
+    badgeLabel = "PAID";
   } else if (normStatus === "OVERDUE") {
     badgeFill = [0.99, 0.92, 0.92];
-    badgeStroke = [0.96, 0.62, 0.62];
-    badgeTextColor = [0.72, 0.15, 0.15];
-    badgeLabel = "PAYMENT OVERDUE";
+    badgeStroke = [0.96, 0.65, 0.65];
+    badgeTextColor = [0.75, 0.15, 0.15];
+    badgeLabel = "OVERDUE";
   } else if (normStatus === "SENT") {
-    badgeFill = [0.91, 0.95, 1.0];
-    badgeStroke = [0.65, 0.78, 0.98];
-    badgeTextColor = [0.12, 0.35, 0.78];
-    badgeLabel = "AWAITING PAYMENT";
+    badgeFill = [0.93, 0.96, 1.0];
+    badgeStroke = [0.70, 0.82, 0.98];
+    badgeTextColor = [0.12, 0.38, 0.82];
+    badgeLabel = "SENT";
   }
 
-  const badgeW = textWidth(badgeLabel, 8.5, true) + 18;
-  fillRect(right - badgeW, 680, badgeW, 18, badgeFill[0], badgeFill[1], badgeFill[2]);
-  strokeRect(right - badgeW, 680, badgeW, 18, badgeStroke[0], badgeStroke[1], badgeStroke[2], 0.75);
-  addRightText(right - 9, 685, 8.5, badgeLabel, true, badgeTextColor[0], badgeTextColor[1], badgeTextColor[2]);
+  const badgeW = textWidth(badgeLabel, 8.5, true) + 16;
+  fillRect(right - badgeW, 692, badgeW, 16, badgeFill[0], badgeFill[1], badgeFill[2]);
+  strokeRect(right - badgeW, 692, badgeW, 16, badgeStroke[0], badgeStroke[1], badgeStroke[2], 0.75);
+  addRightText(right - 8, 696, 8.5, badgeLabel, true, badgeTextColor[0], badgeTextColor[1], badgeTextColor[2]);
 
-  // Subtle Header Divider
-  drawLine(left, 666, right, 666, 0.88, 0.91, 0.94, 1);
+  if (isGst && invoice.placeOfSupply) {
+    addRightText(right, 676, 8, `Place of Supply: ${invoice.placeOfSupply.slice(0, 28)}`, false, 0.4, 0.45, 0.55);
+  }
 
-  // 3. Info Cards Grid (y: 565 to 655)
-  // Left: Bill To
-  fillRect(left, 565, 255, 90, 0.98, 0.99, 1.0);
-  strokeRect(left, 565, 255, 90, 0.9, 0.92, 0.96, 0.8);
-  fillRect(left, 637, 255, 18, 0.93, 0.95, 0.98);
-  addText(left + 12, 642, 8, "BILLED TO (BUYER)", true, 0.35, 0.4, 0.5);
+  // Divider
+  drawLine(left, 656, right, 656, 0.88, 0.91, 0.94, 1);
 
-  addText(left + 12, 622, 10.5, invoice.client.name, true, 0.08, 0.11, 0.18);
-  let billY = 608;
+  // 3. Three-Column Metadata Cards (y: 574 to 648)
+  // Column 1: Billed To (Buyer)
+  addText(left, 642, 7.5, "BILLED TO (BUYER)", true, 0.55, 0.60, 0.70);
+  addText(left, 627, 10.5, invoice.client.name, true, 0.08, 0.11, 0.18);
+  let cY = 614;
   if (invoice.client.company) {
-    addText(left + 12, billY, 8.5, invoice.client.company, false, 0.28, 0.33, 0.42);
-    billY -= 12;
+    addText(left, cY, 8.5, invoice.client.company, false, 0.30, 0.35, 0.45);
+    cY -= 11;
   }
+  if (invoice.client.address) {
+    addText(left, cY, 7.5, invoice.client.address.replace(/\r?\n/g, ", ").slice(0, 44), false, 0.45, 0.50, 0.60);
+    cY -= 10;
+  }
+  addText(left, cY, 7.5, invoice.client.email, false, 0.45, 0.50, 0.60);
+  cY -= 11;
   if (invoice.client.gstin) {
-    addText(left + 12, billY, 8, `GSTIN: ${invoice.client.gstin}`, true, 0.06, 0.48, 0.28);
-    billY -= 12;
-  }
-  addText(left + 12, billY, 8, invoice.client.email, false, 0.38, 0.43, 0.52);
-  if (invoice.client.address && billY > 575) {
-    billY -= 11;
-    addText(left + 12, billY, 7.5, invoice.client.address.replace(/\r?\n/g, ", ").slice(0, 48), false, 0.45, 0.5, 0.58);
+    const gstinText = `GSTIN: ${invoice.client.gstin}`;
+    const gW = textWidth(gstinText, 7.5, true) + 10;
+    fillRect(left, cY - 2, gW, 13, 0.93, 0.98, 0.95);
+    strokeRect(left, cY - 2, gW, 13, 0.65, 0.90, 0.75, 0.6);
+    addText(left + 5, cY + 1, 7.5, gstinText, true, 0.05, 0.45, 0.25);
   }
 
-  // Right: Invoice Particulars & Supply Metadata
-  fillRect(right - 245, 565, 245, 90, 0.98, 0.99, 1.0);
-  strokeRect(right - 245, 565, 245, 90, 0.9, 0.92, 0.96, 0.8);
-  fillRect(right - 245, 637, 245, 18, 0.93, 0.95, 0.98);
-  addText(right - 233, 642, 8, "INVOICE PARTICULARS", true, 0.35, 0.4, 0.5);
+  // Column 2: Issue Date & Terms
+  const col2X = left + 235;
+  addText(col2X, 642, 7.5, "ISSUE DATE", true, 0.55, 0.60, 0.70);
+  addText(col2X, 627, 9.5, formatDate(invoice.issueDate), true, 0.08, 0.11, 0.18);
 
-  addText(right - 233, 621, 8.5, "Issue Date:", false, 0.4, 0.45, 0.55);
-  addRightText(right - 12, 621, 8.5, formatDate(invoice.issueDate), true, 0.08, 0.11, 0.18);
+  addText(col2X, 608, 7.5, "PAYMENT TERMS", true, 0.55, 0.60, 0.70);
+  addText(col2X, 595, 8, "Due within 14 days of receipt", false, 0.35, 0.40, 0.50);
 
-  addText(right - 233, 606, 8.5, "Due Date:", false, 0.4, 0.45, 0.55);
-  addRightText(
-    right - 12,
-    606,
-    8.5,
+  // Column 3: Due Date & Supply Type
+  const col3X = left + 395;
+  addText(col3X, 642, 7.5, "DUE DATE", true, 0.55, 0.60, 0.70);
+  addText(
+    col3X,
+    627,
+    9.5,
     formatDate(invoice.dueDate),
     true,
     normStatus === "OVERDUE" ? 0.75 : 0.08,
-    0.11,
-    0.18
+    normStatus === "OVERDUE" ? 0.15 : 0.11,
+    normStatus === "OVERDUE" ? 0.15 : 0.18
   );
 
-  if (isGst && invoice.placeOfSupply) {
-    addText(right - 233, 591, 8, "Place of Supply:", false, 0.4, 0.45, 0.55);
-    addRightText(right - 12, 591, 8, invoice.placeOfSupply.slice(0, 24), true, 0.15, 0.2, 0.3);
-  } else {
-    addText(right - 233, 591, 8.5, "Currency:", false, 0.4, 0.45, 0.55);
-    addRightText(right - 12, 591, 8.5, invoice.business.currency || "INR", true, 0.2, 0.25, 0.35);
-  }
-
   if (isGst) {
-    addText(right - 233, 576, 7.5, "Tax Nature:", false, 0.45, 0.5, 0.58);
-    addRightText(right - 12, 576, 7.5, isIntraState ? "Intra-State (CGST+SGST)" : "Inter-State (IGST)", true, 0.1, 0.35, 0.25);
+    addText(col3X, 608, 7.5, "SUPPLY TYPE", true, 0.55, 0.60, 0.70);
+    addText(col3X, 595, 8, isIntraState ? "Intra-State (CGST + SGST)" : "Inter-State (IGST)", true, 0.15, 0.25, 0.40);
   }
 
-  // 4. Line Items Table
-  const tableTop = 540;
-  const colDesc = left + 12;
-  const colHsn = isGst ? 310 : 310;
-  const colQty = 370;
-  const colRate = 450;
-  const colAmount = right - 12;
+  // Divider before Line Items
+  drawLine(left, 560, right, 560, 0.88, 0.91, 0.94, 1);
 
-  // Header Row
-  fillRect(left, tableTop - 22, pageWidth, 22, 0.1, 0.13, 0.2);
-  addText(colDesc, tableTop - 15, 8, "DESCRIPTION", true, 0.92, 0.94, 0.98);
-  if (isGst) addText(colHsn - 35, tableTop - 15, 8, "HSN/SAC", true, 0.92, 0.94, 0.98);
-  addRightText(colQty, tableTop - 15, 8, "QTY", true, 0.92, 0.94, 0.98);
-  addRightText(colRate, tableTop - 15, 8, "RATE", true, 0.92, 0.94, 0.98);
-  addRightText(colAmount, tableTop - 15, 8, "AMOUNT", true, 0.92, 0.94, 0.98);
+  // 4. Line Items Table (y: 535 downwards)
+  const tableTop = 535;
+  const colDesc = left + 10;
+  const colHsn = isGst ? left + 225 : left + 240;
+  const colQty = left + 300;
+  const colRate = left + 375;
+  const colGst = left + 445;
+  const colAmount = right - 10;
+
+  // Header Row Box
+  fillRect(left, tableTop - 22, pageWidth, 22, 0.07, 0.10, 0.16);
+  addText(colDesc, tableTop - 15, 8, "DESCRIPTION", true, 0.95, 0.96, 0.98);
+  if (isGst) addText(colHsn, tableTop - 15, 8, "HSN/SAC", true, 0.95, 0.96, 0.98);
+  addRightText(colQty, tableTop - 15, 8, "QTY", true, 0.95, 0.96, 0.98);
+  addRightText(colRate, tableTop - 15, 8, "RATE", true, 0.95, 0.96, 0.98);
+  if (isGst) addRightText(colGst, tableTop - 15, 8, "GST %", true, 0.95, 0.96, 0.98);
+  addRightText(colAmount, tableTop - 15, 8, "AMOUNT", true, 0.95, 0.96, 0.98);
 
   let currentY = tableTop - 22;
   let rowIndex = 0;
 
   for (const item of invoice.lineItems) {
-    if (currentY < 200) break;
+    if (currentY < 210) break;
     const rowH = 22;
     currentY -= rowH;
 
     if (rowIndex % 2 === 1) {
       fillRect(left, currentY, pageWidth, rowH, 0.97, 0.98, 0.99);
     }
-    drawLine(left, currentY, right, currentY, 0.91, 0.93, 0.95, 0.7);
+    drawLine(left, currentY, right, currentY, 0.90, 0.92, 0.95, 0.7);
 
     const qty = Number(item.quantity) || 1;
     const rate = Number(item.rate) || 0;
     const amount = qty * rate;
+    const gstRateVal = item.gstRate ? `${Number(item.gstRate)}%` : "18%";
 
-    addText(colDesc, currentY + 7, 8.5, item.description.slice(0, 36), false, 0.1, 0.13, 0.2);
+    addText(colDesc, currentY + 7, 8.5, item.description.slice(0, 32), true, 0.10, 0.13, 0.20);
     if (isGst) {
-      addText(colHsn - 35, currentY + 7, 8, (item.hsnSac || "—").slice(0, 10), false, 0.35, 0.4, 0.5);
+      addText(colHsn, currentY + 7, 8, (item.hsnSac || "—").slice(0, 10), false, 0.35, 0.40, 0.50);
     }
-    addRightText(colQty, currentY + 7, 8.5, String(qty), false, 0.3, 0.35, 0.45);
-    addRightText(colRate, currentY + 7, 8.5, formatPdfMoney(rate, invoice.business.currency), false, 0.3, 0.35, 0.45);
+    addRightText(colQty, currentY + 7, 8.5, String(qty), false, 0.30, 0.35, 0.45);
+    addRightText(colRate, currentY + 7, 8.5, formatPdfMoney(rate, invoice.business.currency), false, 0.30, 0.35, 0.45);
+    if (isGst) {
+      addRightText(colGst, currentY + 7, 8, gstRateVal, false, 0.35, 0.40, 0.50);
+    }
     addRightText(colAmount, currentY + 7, 8.5, formatPdfMoney(amount, invoice.business.currency), true, 0.08, 0.11, 0.18);
 
     rowIndex++;
   }
 
-  // 5. Bottom Section: Bank / Notes & Summary
-  const summaryTop = currentY - 18;
+  // Bottom table line
+  drawLine(left, currentY, right, currentY, 0.85, 0.88, 0.92, 1);
 
-  // Left Column: Settlement & Wire Transfer Box
-  const notesBoxW = 265;
-  const notesBoxH = 105;
-  fillRect(left, summaryTop - notesBoxH, notesBoxW, notesBoxH, 0.98, 0.99, 1.0);
-  strokeRect(left, summaryTop - notesBoxH, notesBoxW, notesBoxH, 0.88, 0.91, 0.94, 0.8);
-  fillRect(left, summaryTop - notesBoxH, 4, notesBoxH, isGst ? 0.06 : 0.24, isGst ? 0.58 : 0.32, isGst ? 0.36 : 0.96);
+  // 5. Bottom Section: Bank / Notes (Left) & Totals (Right)
+  const summaryTop = currentY - 16;
 
-  addText(left + 12, summaryTop - 16, 8, "SETTLEMENT & PAYMENT INSTRUCTIONS", true, 0.35, 0.4, 0.5);
-  let noteY = summaryTop - 30;
+  // Left Column: Bank & Wire Settlement Details Card (matching on-screen card)
+  const bankCardW = 280;
+  const bankCardH = 100;
+  fillRect(left, summaryTop - bankCardH, bankCardW, bankCardH, 0.98, 0.99, 1.0);
+  strokeRect(left, summaryTop - bankCardH, bankCardW, bankCardH, 0.88, 0.91, 0.94, 0.8);
+  fillRect(left, summaryTop - bankCardH, 3, bankCardH, isGst ? 0.05 : 0.31, isGst ? 0.55 : 0.27, isGst ? 0.38 : 0.90);
+
+  addText(left + 12, summaryTop - 15, 8, "BANK & WIRE SETTLEMENT DETAILS", true, 0.35, 0.40, 0.50);
+  let bY = summaryTop - 28;
 
   if (invoice.business.bankName || invoice.business.bankAccountNo) {
     if (invoice.business.bankName) {
-      addText(left + 12, noteY, 8, `Bank: ${invoice.business.bankName}`, true, 0.15, 0.2, 0.3);
-      noteY -= 11;
+      addText(left + 12, bY, 7.5, "Bank:", false, 0.45, 0.50, 0.60);
+      addText(left + 58, bY, 7.5, invoice.business.bankName, true, 0.10, 0.13, 0.20);
+      bY -= 11;
     }
     if (invoice.business.bankAccountNo) {
-      addText(left + 12, noteY, 8, `A/C No: ${invoice.business.bankAccountNo}`, false, 0.2, 0.25, 0.35);
-      noteY -= 11;
+      addText(left + 12, bY, 7.5, "A/C No:", false, 0.45, 0.50, 0.60);
+      addText(left + 58, bY, 7.5, invoice.business.bankAccountNo, true, 0.10, 0.13, 0.20);
+      bY -= 11;
     }
     if (invoice.business.bankIfsc) {
-      addText(left + 12, noteY, 8, `IFSC: ${invoice.business.bankIfsc}`, false, 0.2, 0.25, 0.35);
-      noteY -= 11;
+      addText(left + 12, bY, 7.5, "IFSC:", false, 0.45, 0.50, 0.60);
+      addText(left + 58, bY, 7.5, invoice.business.bankIfsc, true, 0.10, 0.13, 0.20);
+      bY -= 11;
+    }
+    if (invoice.business.bankBranch) {
+      addText(left + 12, bY, 7.5, "Branch:", false, 0.45, 0.50, 0.60);
+      addText(left + 58, bY, 7.5, invoice.business.bankBranch.slice(0, 36), false, 0.20, 0.25, 0.35);
+      bY -= 11;
     }
     if (invoice.business.upiId) {
-      addText(left + 12, noteY, 8, `UPI ID: ${invoice.business.upiId}`, true, 0.1, 0.45, 0.25);
-      noteY -= 11;
+      addText(left + 12, bY, 7.5, "UPI VPA:", false, 0.45, 0.50, 0.60);
+      addText(left + 58, bY, 7.5, invoice.business.upiId, true, 0.05, 0.45, 0.25);
+      bY -= 11;
     }
   } else if (invoice.notes) {
     const noteLines = invoice.notes.split(/\r?\n/).slice(0, 4);
     for (const nl of noteLines) {
-      addText(left + 12, noteY, 8, nl.slice(0, 48), false, 0.25, 0.3, 0.4);
-      noteY -= 11;
+      addText(left + 12, bY, 7.5, nl.slice(0, 48), false, 0.25, 0.30, 0.40);
+      bY -= 11;
     }
   } else {
-    addText(left + 12, noteY, 8, "Please pay by the due date mentioned above.", false, 0.3, 0.35, 0.45);
+    addText(left + 12, bY, 7.5, "Please remit payment by the due date.", false, 0.35, 0.40, 0.50);
   }
 
-  // Right Column: Financial Totals Box
+  // Notes box if bank details took the primary card and notes exist
+  if (invoice.notes && (invoice.business.bankName || invoice.business.bankAccountNo)) {
+    const notesY = summaryTop - bankCardH - 24;
+    addText(left, notesY + 12, 7.5, "NOTES & TERMS", true, 0.55, 0.60, 0.70);
+    addText(left, notesY, 7.5, invoice.notes.slice(0, 70), false, 0.35, 0.40, 0.50);
+  }
+
+  // Right Column: Financial Totals Box (matching on-screen card)
   const summaryBoxW = 230;
   const summaryBoxLeft = right - summaryBoxW;
   let sumY = summaryTop;
 
   // Subtotal
-  addText(summaryBoxLeft + 10, sumY - 12, 8.5, "Taxable Subtotal", false, 0.38, 0.43, 0.52);
-  addRightText(right - 10, sumY - 12, 8.5, formatPdfMoney(invoice.totals.subtotal, invoice.business.currency), false, 0.1, 0.13, 0.2);
+  addText(summaryBoxLeft + 10, sumY - 12, 8.5, "Taxable Subtotal", false, 0.40, 0.45, 0.55);
+  addRightText(right - 10, sumY - 12, 8.5, formatPdfMoney(invoice.totals.subtotal, invoice.business.currency), false, 0.10, 0.13, 0.20);
   sumY -= 17;
 
   // Discount
   const discountRate = Number(invoice.discountRate) || 0;
   if (discountRate > 0 || invoice.totals.discount > 0) {
-    addText(summaryBoxLeft + 10, sumY - 12, 8.5, `Discount (${discountRate.toFixed(1)}%)`, false, 0.38, 0.43, 0.52);
-    addRightText(right - 10, sumY - 12, 8.5, `-${formatPdfMoney(invoice.totals.discount, invoice.business.currency)}`, false, 0.7, 0.15, 0.15);
+    addText(summaryBoxLeft + 10, sumY - 12, 8.5, `Discount (${discountRate.toFixed(1)}%)`, false, 0.40, 0.45, 0.55);
+    addRightText(right - 10, sumY - 12, 8.5, `-${formatPdfMoney(invoice.totals.discount, invoice.business.currency)}`, false, 0.05, 0.55, 0.30);
     sumY -= 17;
   }
 
   // Tax Breakdown
   if (isGst) {
     if (isIntraState) {
-      addText(summaryBoxLeft + 10, sumY - 12, 8, "Central Tax (CGST)", false, 0.38, 0.43, 0.52);
-      addRightText(right - 10, sumY - 12, 8, formatPdfMoney(cgstVal, invoice.business.currency), false, 0.1, 0.13, 0.2);
+      addText(summaryBoxLeft + 10, sumY - 12, 8, "Central Tax (CGST)", false, 0.40, 0.45, 0.55);
+      addRightText(right - 10, sumY - 12, 8, formatPdfMoney(cgstVal, invoice.business.currency), false, 0.10, 0.13, 0.20);
       sumY -= 15;
 
-      addText(summaryBoxLeft + 10, sumY - 12, 8, "State Tax (SGST)", false, 0.38, 0.43, 0.52);
-      addRightText(right - 10, sumY - 12, 8, formatPdfMoney(sgstVal, invoice.business.currency), false, 0.1, 0.13, 0.2);
+      addText(summaryBoxLeft + 10, sumY - 12, 8, "State Tax (SGST)", false, 0.40, 0.45, 0.55);
+      addRightText(right - 10, sumY - 12, 8, formatPdfMoney(sgstVal, invoice.business.currency), false, 0.10, 0.13, 0.20);
       sumY -= 15;
     } else {
-      addText(summaryBoxLeft + 10, sumY - 12, 8, "Integrated Tax (IGST)", false, 0.38, 0.43, 0.52);
-      addRightText(right - 10, sumY - 12, 8, formatPdfMoney(igstVal, invoice.business.currency), false, 0.1, 0.13, 0.2);
+      addText(summaryBoxLeft + 10, sumY - 12, 8, "Integrated Tax (IGST)", false, 0.40, 0.45, 0.55);
+      addRightText(right - 10, sumY - 12, 8, formatPdfMoney(igstVal, invoice.business.currency), false, 0.10, 0.13, 0.20);
       sumY -= 15;
     }
   } else {
     const taxRate = Number(invoice.taxRate) || 0;
     if (taxRate > 0 || invoice.totals.tax > 0) {
-      addText(summaryBoxLeft + 10, sumY - 12, 8.5, `Tax (${taxRate.toFixed(1)}%)`, false, 0.38, 0.43, 0.52);
-      addRightText(right - 10, sumY - 12, 8.5, formatPdfMoney(invoice.totals.tax, invoice.business.currency), false, 0.1, 0.13, 0.2);
+      addText(summaryBoxLeft + 10, sumY - 12, 8.5, `Tax (${taxRate.toFixed(1)}%)`, false, 0.40, 0.45, 0.55);
+      addRightText(right - 10, sumY - 12, 8.5, formatPdfMoney(invoice.totals.tax, invoice.business.currency), false, 0.10, 0.13, 0.20);
       sumY -= 17;
     }
   }
 
-  // Highlighted Total Due Box
+  // Prominent Total Due Box
   sumY -= 6;
-  const totalBoxH = 30;
-  fillRect(summaryBoxLeft, sumY - totalBoxH, summaryBoxW, totalBoxH, 0.09, 0.12, 0.2);
-  addText(summaryBoxLeft + 10, sumY - 19, 9.5, "Total Amount Due", true, 0.9, 0.93, 0.98);
-  addRightText(right - 10, sumY - 19, 12, formatPdfMoney(invoice.totals.total, invoice.business.currency), true, 1.0, 1.0, 1.0);
+  const totalBoxH = 32;
+  fillRect(summaryBoxLeft, sumY - totalBoxH, summaryBoxW, totalBoxH, 0.06, 0.09, 0.16);
+  addText(summaryBoxLeft + 12, sumY - 20, 10, "Total Amount Due", true, 0.90, 0.93, 0.98);
+  addRightText(right - 12, sumY - 20, 12, formatPdfMoney(invoice.totals.total, invoice.business.currency), true, 1.0, 1.0, 1.0);
 
   // 6. Professional Executive Footer
-  const footerY = 44;
+  const footerY = 36;
   drawLine(left, footerY + 14, right, footerY + 14, 0.88, 0.91, 0.94, 0.8);
   addText(
     left,
     footerY,
-    8,
+    7.5,
     isGst
-      ? "Computer Generated GST Tax Invoice • Subject to Jurisdictional Courts • No signature required"
-      : "Thank you for your business! Please settle within the agreed payment schedule.",
+      ? "This is a computer-generated Tax Invoice under Indian GST Law • No signature required."
+      : "This is a computer-generated commercial invoice • No signature required.",
     false,
     0.45,
-    0.5,
+    0.50,
     0.58
   );
-  addRightText(right, footerY, 7.5, "Generated via BillFlow Workspace | Page 1 of 1", false, 0.55, 0.6, 0.68);
+  addRightText(right, footerY, 7.5, "BillFlow Cloud Billing", false, 0.55, 0.60, 0.68);
 
   // Assemble PDF Document
   const content = `q\n${stream.join("\n")}\nQ`;

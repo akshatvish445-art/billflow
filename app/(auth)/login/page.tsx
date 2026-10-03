@@ -41,6 +41,24 @@ export default function LoginPage() {
     setShowDemo(false);
   };
 
+  const loginWithDemo = async () => {
+    setLoading(true);
+    setError("");
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "demo@billflow.app", password: "Demo@12345" }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setError(data.error || "Unable to sign in.");
+      setLoading(false);
+      return;
+    }
+    router.push("/dashboard");
+    router.refresh();
+  };
+
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-7 shadow-soft sm:p-8">
       {/* Header */}
@@ -113,30 +131,49 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      {/* Demo hint */}
-      <div className="mt-5">
-        <button
-          type="button"
-          onClick={() => setShowDemo(!showDemo)}
-          className="flex w-full items-center gap-2 rounded-xl bg-slate-50 px-3.5 py-3 text-xs font-medium text-slate-500 hover:bg-slate-100 transition"
-        >
-          <Sparkles size={13} className="text-indigo-400" />
-          Want to try a demo account?
-          <span className="ml-auto text-xs text-slate-400">{showDemo ? "Hide" : "Show"}</span>
-        </button>
+      {/* Demo account card */}
+      <div className="mt-5 rounded-2xl border border-indigo-100 bg-indigo-50/60 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Sparkles size={16} className="text-indigo-600" />
+            <span className="text-xs font-bold text-slate-800">Explore Demo Workspace</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowDemo(!showDemo)}
+            className="text-xs font-medium text-indigo-600 hover:text-indigo-800 underline"
+          >
+            {showDemo ? "Hide Details" : "View Credentials"}
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-slate-500">
+          Instant access with pre-configured GST tax invoices, clients & payment portals.
+        </p>
+
         {showDemo && (
-          <div className="mt-2 rounded-xl border border-slate-100 bg-slate-50 px-3.5 py-3 text-xs text-slate-600">
-            <p><span className="font-semibold">Email:</span> demo@billflow.app</p>
-            <p><span className="font-semibold">Password:</span> Demo@12345</p>
-            <button
-              type="button"
-              onClick={fillDemo}
-              className="mt-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 transition"
-            >
-              Fill credentials
-            </button>
+          <div className="mt-3 rounded-xl border border-indigo-200/60 bg-white p-3 text-xs text-slate-700 space-y-1">
+            <p><span className="font-semibold text-slate-900">Email:</span> demo@billflow.app</p>
+            <p><span className="font-semibold text-slate-900">Password:</span> Demo@12345</p>
           </div>
         )}
+
+        <div className="mt-3 flex gap-2">
+          <button
+            type="button"
+            onClick={loginWithDemo}
+            disabled={loading}
+            className="flex-1 rounded-xl bg-indigo-600 px-3.5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-indigo-700 transition disabled:opacity-50"
+          >
+            {loading ? "Signing in..." : "⚡ 1-Click Demo Login"}
+          </button>
+          <button
+            type="button"
+            onClick={fillDemo}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+          >
+            Fill form
+          </button>
+        </div>
       </div>
 
       <p className="mt-6 text-center text-sm text-slate-500">
