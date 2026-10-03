@@ -14,22 +14,36 @@ enum InvoiceStatus {
 }
 
 model User {
-  id             String      @id @default(cuid())
-  email          String      @unique
-  passwordHash   String
-  name           String?
-  businessName   String      @default("Your Business")
-  logoData       String?
-  currency       String      @default("INR")
-  invoicePrefix  String      @default("INV")
-  invoiceSequence Int        @default(1000)
-  plan           String      @default("STARTER")
-  planStatus     String      @default("ACTIVE")
-  planPeriod     String      @default("MONTHLY")
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  clients        Client[]
-  invoices       Invoice[]
+  id              String      @id @default(cuid())
+  email           String      @unique
+  passwordHash    String
+  name            String?
+  businessName    String      @default("Your Business")
+  logoData        String?
+  currency        String      @default("INR")
+  invoicePrefix   String      @default("INV")
+  invoiceSequence Int         @default(1000)
+  plan            String      @default("STARTER")
+  planStatus      String      @default("ACTIVE")
+  planPeriod      String      @default("MONTHLY")
+
+  // Organization & GST Compliance Details
+  isGstRegistered Boolean     @default(false)
+  gstin           String?
+  pan             String?
+  businessAddress String?
+  state           String?
+  stateCode       String?
+  bankName        String?
+  bankAccountNo   String?
+  bankIfsc        String?
+  bankBranch      String?
+  upiId           String?
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  clients         Client[]
+  invoices        Invoice[]
 }
 
 model Client {
@@ -40,6 +54,12 @@ model Client {
   company   String?
   address   String?
   phone     String?
+
+  // Client GST Details
+  gstin     String?
+  state     String?
+  stateCode String?
+
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -64,6 +84,14 @@ model Invoice {
   publicToken  String        @unique
   sentAt       DateTime?
   paidAt       DateTime?
+
+  // GST & Tax Invoice Fields
+  isGstInvoice  Boolean      @default(false)
+  placeOfSupply String?
+  cgstAmount    Decimal      @default(0)
+  sgstAmount    Decimal      @default(0)
+  igstAmount    Decimal      @default(0)
+
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -83,6 +111,8 @@ model InvoiceLineItem {
   description String
   quantity    Decimal
   rate        Decimal
+  hsnSac      String?
+  gstRate     Decimal? @default(18)
   createdAt   DateTime @default(now())
   invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 

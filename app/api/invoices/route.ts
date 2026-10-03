@@ -8,6 +8,7 @@ import { invoiceSchema } from "@/lib/validators";
 import { errorResponse, notFoundResponse, unauthorized } from "@/lib/http";
 import { makePublicToken } from "@/lib/invoices";
 import { effectiveStatus, invoiceTotals } from "@/lib/utils";
+import { calculateGstBreakdown } from "@/lib/gst";
 
 function parseDateInput(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
@@ -65,8 +66,49 @@ export async function POST(req: Request) {
     if (!issueDate || !dueDate) return errorResponse("Enter valid dates.");
     if (dueDate < issueDate) return errorResponse("Due date cannot be before issue date.");
 
-    const client = await prisma.client.findFirst({ where: { id: parsed.data.clientId, userId: user.id }, select: { id: true } });
+    const client = await prisma.client.findFirst({
+      where: { id: parsed.data.clientId, userId: user.id },
+      select: { id: true, name: true, gstin: true, state: true, stateCode: true },
+    });
     if (!client) return notFoundResponse("Client");
+
+    // Subscription Limit Check
+    if (user.plan === "STARTER") {
+      const now = new Date();
+      const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthlyInvoiceCount = await prisma.invoice.count({
+        where: {
+          userId: user.id,
+          createdAt: { gte: firstDayOfMonth },
+        },
+      });
+
+      if (monthlyInvoiceCount >= 30) {
+        return errorResponse(
+          "Starter plan limit reached (30 invoices/month). Please upgrade to Pro Studio or Organization GST in Settings.",
+          403
+        );
+      }
+    }
+
+    const isGst = Boolean(parsed.data.isGstInvoice || user.isGstRegistered);
+    const placeOfSupply =
+      parsed.data.placeOfSupply?.trim() ||
+      (client.stateCode ? `${client.stateCode} - ${client.state || ""}` : client.state || user.state || null);
+
+    // Calculate GST Split
+    const gstBreakdown = calculateGstBreakdown({
+      items: parsed.data.items.map((i) => ({
+        quantity: i.quantity,
+        rate: i.rate,
+        gstRate: i.gstRate,
+      })),
+      discountRate: parsed.data.discountRate,
+      overallTaxRate: parsed.data.taxRate,
+      isGstInvoice: isGst,
+      supplierStateCode: user.stateCode,
+      clientStateCode: client.stateCode,
+    });
 
     const invoice = await prisma.$transaction(async (tx) => {
       const updatedUser = await tx.user.update({
@@ -83,17 +125,39 @@ export async function POST(req: Request) {
           issueDate,
           dueDate,
           notes: parsed.data.notes || null,
-          taxRate: parsed.data.taxRate,
+          taxRate: isGst ? gstBreakdown.effectiveTaxRate : parsed.data.taxRate,
           discountRate: parsed.data.discountRate,
+          isGstInvoice: isGst,
+          placeOfSupply,
+          cgstAmount: gstBreakdown.cgst,
+          sgstAmount: gstBreakdown.sgst,
+          igstAmount: gstBreakdown.igst,
           status: "DRAFT",
           publicToken: makePublicToken(),
-          lineItems: { create: parsed.data.items.map((item) => ({ description: item.description.trim(), quantity: item.quantity, rate: item.rate })) },
+          lineItems: {
+            create: parsed.data.items.map((item) => ({
+              description: item.description.trim(),
+              quantity: item.quantity,
+              rate: item.rate,
+              hsnSac: item.hsnSac?.trim() || null,
+              gstRate: item.gstRate ?? 18,
+            })),
+          },
         },
         include: { client: true, lineItems: true },
       });
     });
 
-    return NextResponse.json({ invoice: { ...invoice, computedStatus: effectiveStatus(invoice), totals: invoiceTotals(invoice) } }, { status: 201 });
+    return NextResponse.json(
+      {
+        invoice: {
+          ...invoice,
+          computedStatus: effectiveStatus(invoice),
+          totals: invoiceTotals(invoice),
+        },
+      },
+      { status: 201 }
+    );
   } catch (error) {
     console.error("invoice.create", error);
     return errorResponse("Could not create invoice.", 500);

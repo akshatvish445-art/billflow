@@ -3,46 +3,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { errorResponse, unauthorized } from "@/lib/http";
 import { z } from "zod";
+import { SUBSCRIPTION_PLANS } from "@/lib/subscription";
 
 export const dynamic = "force-dynamic";
-
-export const SUBSCRIPTION_PLANS = {
-  STARTER: {
-    id: "STARTER",
-    name: "Starter",
-    price: 9,
-    interval: "month",
-    invoicesLimit: 30,
-    features: [
-      "Up to 30 active invoices/month",
-      "Unlimited clients & contacts",
-      "Executive PDF generation & downloads",
-      "Branded public invoice payment portal",
-      "Multi-currency support (USD, EUR, GBP, INR, etc.)",
-      "Automated tax & discount calculation",
-      "Custom invoice prefix & numbering",
-      "Standard email support",
-    ],
-  },
-  PRO: {
-    id: "PRO",
-    name: "Pro Studio",
-    price: 15,
-    interval: "month",
-    invoicesLimit: -1, // Unlimited
-    features: [
-      "Unlimited invoices & line items",
-      "Unlimited clients & contacts",
-      "Executive PDF invoices with bank callout & status stamps",
-      "Automated overdue tracking & payment alerts",
-      "Cash flow & revenue analytics dashboard",
-      "One-click CSV & financial report export",
-      "Custom invoice numbering & business sequence control",
-      "Priority 24/7 dedicated support & SLA",
-      "Early access to automated retainers & live webhooks",
-    ],
-  },
-} as const;
 
 export async function GET() {
   const user = await getCurrentUser();
@@ -52,7 +15,9 @@ export async function GET() {
     where: { userId: user.id },
   });
 
-  const planKey = (user.plan === "PRO" ? "PRO" : "STARTER") as keyof typeof SUBSCRIPTION_PLANS;
+  const planKey = (
+    user.plan in SUBSCRIPTION_PLANS ? user.plan : "STARTER"
+  ) as keyof typeof SUBSCRIPTION_PLANS;
   const currentPlan = SUBSCRIPTION_PLANS[planKey];
 
   return NextResponse.json({
@@ -66,7 +31,7 @@ export async function GET() {
 }
 
 const updatePlanSchema = z.object({
-  plan: z.enum(["STARTER", "PRO"]),
+  plan: z.enum(["STARTER", "PRO", "ORGANIZATION"]),
   period: z.enum(["MONTHLY", "YEARLY"]).optional().default("MONTHLY"),
 });
 
@@ -87,6 +52,7 @@ export async function PUT(req: Request) {
         plan: parsed.data.plan,
         planPeriod: parsed.data.period,
         planStatus: "ACTIVE",
+        ...(parsed.data.plan === "ORGANIZATION" && !user.isGstRegistered ? { isGstRegistered: true } : {}),
       },
     });
 
@@ -100,6 +66,7 @@ export async function PUT(req: Request) {
         plan: updated.plan,
         planStatus: updated.planStatus,
         planPeriod: updated.planPeriod,
+        isGstRegistered: updated.isGstRegistered,
       },
       details: SUBSCRIPTION_PLANS[planKey],
     });

@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { clientSchema } from "@/lib/validators";
 import { errorResponse, notFoundResponse, unauthorized } from "@/lib/http";
+import { parseGstin, getStateByCode } from "@/lib/gst";
 
 export async function GET(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const user = await getCurrentUser();
@@ -25,7 +26,34 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   try {
     const parsed = clientSchema.safeParse(await req.json());
     if (!parsed.success) return errorResponse("Please enter a valid name and email.");
-    const client = await prisma.client.update({ where: { id }, data: parsed.data });
+    
+    let gstin = parsed.data.gstin?.trim().toUpperCase() || null;
+    let state = parsed.data.state?.trim() || null;
+    let stateCode = parsed.data.stateCode?.trim() || null;
+
+    if (gstin && gstin.length >= 2) {
+      const gstinInfo = parseGstin(gstin);
+      if (gstinInfo.isValid) {
+        if (!stateCode) stateCode = gstinInfo.stateCode || null;
+        if (!state) state = gstinInfo.stateName || null;
+      }
+    } else if (stateCode && !state) {
+      state = getStateByCode(stateCode)?.name || state;
+    }
+
+    const client = await prisma.client.update({
+      where: { id },
+      data: {
+        name: parsed.data.name,
+        email: parsed.data.email,
+        company: parsed.data.company || null,
+        address: parsed.data.address || null,
+        phone: parsed.data.phone || null,
+        gstin,
+        state,
+        stateCode,
+      },
+    });
     return NextResponse.json({ client });
   } catch {
     return errorResponse("Could not update client.", 500);

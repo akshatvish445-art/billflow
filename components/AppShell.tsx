@@ -30,7 +30,13 @@ export function AppShell({
     router.refresh();
   };
 
+  const isOrg = user.plan === "ORGANIZATION";
   const isPro = user.plan === "PRO";
+  const planLabel = isOrg
+    ? "Organization GST"
+    : isPro
+    ? "Pro Studio"
+    : "Starter Plan";
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -74,17 +80,35 @@ export function AppShell({
           <Link
             href="/settings"
             className={`flex items-center justify-between rounded-2xl border px-3.5 py-2.5 text-xs transition ${
-              isPro
+              isOrg
+                ? "border-emerald-200 bg-emerald-50/70 text-emerald-900 hover:bg-emerald-100/70"
+                : isPro
                 ? "border-brand-200 bg-brand-50/70 text-brand-900 hover:bg-brand-100/70"
                 : "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100"
             }`}
           >
-            <div className="flex items-center gap-2 font-bold">
-              <span className={`h-2 w-2 rounded-full ${isPro ? "bg-brand-600 animate-pulse" : "bg-emerald-500"}`} />
-              <span>{isPro ? "Pro Studio ($15/mo)" : "Starter ($9/mo)"}</span>
+            <div className="flex items-center gap-2 font-bold truncate">
+              <span
+                className={`h-2 w-2 rounded-full shrink-0 ${
+                  isOrg
+                    ? "bg-emerald-600"
+                    : isPro
+                    ? "bg-brand-600 animate-pulse"
+                    : "bg-slate-400"
+                }`}
+              />
+              <span className="truncate">{planLabel}</span>
             </div>
-            <span className="text-[10px] font-extrabold text-brand-600 uppercase tracking-wider">
-              {isPro ? "Active" : "Upgrade"}
+            <span
+              className={`text-[10px] font-extrabold uppercase tracking-wider shrink-0 ${
+                isOrg
+                  ? "text-emerald-700"
+                  : isPro
+                  ? "text-brand-600"
+                  : "text-slate-500 hover:text-brand-600"
+              }`}
+            >
+              {isOrg || isPro ? "Active" : "Upgrade"}
             </span>
           </Link>
 

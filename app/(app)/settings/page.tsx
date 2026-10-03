@@ -14,6 +14,17 @@ export default async function SettingsPage() {
         plan: user.plan || "STARTER",
         planStatus: user.planStatus || "ACTIVE",
         planPeriod: user.planPeriod || "MONTHLY",
+        isGstRegistered: user.isGstRegistered ?? false,
+        gstin: user.gstin || "",
+        pan: user.pan || "",
+        businessAddress: user.businessAddress || "",
+        state: user.state || "",
+        stateCode: user.stateCode || "",
+        bankName: user.bankName || "",
+        bankAccountNo: user.bankAccountNo || "",
+        bankIfsc: user.bankIfsc || "",
+        bankBranch: user.bankBranch || "",
+        upiId: user.upiId || "",
       }}
       currencies={currencies}
     />

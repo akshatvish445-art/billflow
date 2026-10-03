@@ -34,12 +34,39 @@ export function dateInputValue(value: Date | string) {
   return new Date(value).toISOString().slice(0, 10);
 }
 
-export function invoiceTotals(invoice: { taxRate: any; discountRate: any; lineItems: { quantity: any; rate: any }[] }) {
+export function invoiceTotals(invoice: {
+  taxRate: any;
+  discountRate: any;
+  lineItems: { quantity: any; rate: any }[];
+  isGstInvoice?: boolean;
+  cgstAmount?: any;
+  sgstAmount?: any;
+  igstAmount?: any;
+}) {
   const subtotal = invoice.lineItems.reduce((sum, item) => sum + Number(item.quantity) * Number(item.rate), 0);
   const discount = subtotal * (Number(invoice.discountRate) / 100);
   const taxable = Math.max(subtotal - discount, 0);
-  const tax = taxable * (Number(invoice.taxRate) / 100);
-  return { subtotal, discount, tax, total: taxable + tax };
+
+  const cgst = Number(invoice.cgstAmount || 0);
+  const sgst = Number(invoice.sgstAmount || 0);
+  const igst = Number(invoice.igstAmount || 0);
+  const hasGstAmounts = cgst > 0 || sgst > 0 || igst > 0;
+
+  const tax = hasGstAmounts
+    ? cgst + sgst + igst
+    : taxable * (Number(invoice.taxRate) / 100);
+
+  return {
+    subtotal,
+    discount,
+    taxable,
+    tax,
+    total: taxable + tax,
+    isGst: Boolean(invoice.isGstInvoice || hasGstAmounts),
+    cgst,
+    sgst,
+    igst,
+  };
 }
 
 export function effectiveStatus(invoice: { status: "DRAFT" | "SENT" | "PAID"; dueDate: Date | string }) {
